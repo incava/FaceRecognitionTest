@@ -42,7 +42,16 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.lifecycle)
+
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+    implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.hilt.android.v2561)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.camera.lifecycle)
     ksp(libs.hilt.android.compiler)
     implementation (libs.face.detection)
     implementation(libs.androidx.core.ktx)
