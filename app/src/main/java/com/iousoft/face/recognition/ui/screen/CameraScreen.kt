@@ -1,13 +1,18 @@
 package com.iousoft.face.recognition.ui.screen
 
-import android.graphics.Bitmap
+import android.content.ContentValues
+import android.content.Context
+import android.provider.MediaStore
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,24 +24,46 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import coil3.Bitmap
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.iousoft.face.recognition.ui.component.CameraPreview
 import com.iousoft.face.recognition.ui.component.RequestCameraPermission
+import com.iousoft.face.recognition.viewmodel.FaceViewModel
 
 
 @Composable
-fun CameraScreen() {
+fun CameraScreen(
+    viewModel: FaceViewModel = hiltViewModel(),
+    onBack: () -> Unit,
+) {
     var showCamera by remember { mutableStateOf(false) }
-    var faceBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val faceBitmap by viewModel.processedFaceBitmap
     val context = LocalContext.current
-    val imageRequest = ImageRequest.Builder(LocalContext.current)
-        .data(faceBitmap)
-        .crossfade(true)
-        .build()
-
     var hasCameraPermission by remember { mutableStateOf(false) }
+    var isChecked by remember { mutableStateOf(true) }
+    var isStopPreview by remember { mutableStateOf(false) }
+    BackHandler(enabled = showCamera || faceBitmap != null) {
+        when {
+            faceBitmap != null -> {
+                // 얼굴 사진 보여지는 상태에서 뒤로가기 눌렀을 때
+                viewModel.reset()
+                showCamera = false
+            }
+
+            showCamera -> {
+                // 카메라 프리뷰 실행 중일 때 뒤로가기 눌렀을 때
+                showCamera = false
+
+            }
+
+            else -> {
+                onBack()
+            }
+        }
+    }
 
     if (!hasCameraPermission) {
         RequestCameraPermission(
@@ -62,19 +89,28 @@ fun CameraScreen() {
                         verticalArrangement = Arrangement.Center
                     ) {
                         AsyncImage(
-                            model = imageRequest,
-                            contentDescription = "Detected Face",
-                            contentScale = ContentScale.Fit, // 또는 .Inside
-                            modifier = Modifier.size(240.dp)
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(faceBitmap)
+                                .crossfade(true)
+                                .build(),
+                            contentScale = ContentScale.Fit,
+                            contentDescription = null,
+                            modifier = Modifier.height(540.dp)
                         )
                         Button(
                             onClick = {
-                                faceBitmap = null
+                                viewModel.reset()
                                 showCamera = false
                             }) {
                             Text("다시 시도")
                         }
-
+                        Button(onClick = {
+                            faceBitmap?.let {
+                                saveBitmapToGallery(context, it)
+                            }
+                        }) {
+                            Text("사진 저장")
+                        }
                     }
 
                 }
@@ -85,10 +121,11 @@ fun CameraScreen() {
         showCamera -> {
             // 카메라 프리뷰 실행
             CameraPreview(
-                onFaceDetected = { bitmap ->
-                    faceBitmap = bitmap
-                    // viewModel.onFaceCaptured(bitmap) // 필요 시 사용
-                }
+                onFaceDetected = { originalBitmap ->
+                    viewModel.processFaceBitmap(originalBitmap, isChecked)
+                    Toast.makeText(context, "사진 추적 완료", Toast.LENGTH_SHORT).show()
+                },
+                isStopPreview = isStopPreview
             )
         }
 
@@ -98,11 +135,58 @@ fun CameraScreen() {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Button(onClick = { showCamera = true }) {
-                    Text("얼굴 인식 시작")
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                )
+                {
+                    Button(onClick = { showCamera = true }) {
+                        Text("얼굴 인식 시작")
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(text = "누끼")
+                        Text(text = if (isChecked) "ON" else "OFF")
+                        Switch(
+                            checked = isChecked,
+                            onCheckedChange = { isChecked = it }
+                        )
+                    }
                 }
             }
-
         }
+    }
+}
+
+
+fun saveBitmapToGallery(
+    context: Context,
+    bitmap: Bitmap,
+    fileName: String = "face_${System.currentTimeMillis()}.jpg"
+) {
+    val contentValues = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+        put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/FaceRecognition")
+        put(MediaStore.Images.Media.IS_PENDING, 1)
+    }
+
+    val resolver = context.contentResolver
+    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+    uri?.let {
+        resolver.openOutputStream(uri)?.use { outStream ->
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, outStream)
+        }
+
+        contentValues.clear()
+        contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+        resolver.update(uri, contentValues, null, null)
+
+        Toast.makeText(context, "이미지 저장 완료", Toast.LENGTH_SHORT).show()
+    } ?: run {
+        Toast.makeText(context, "이미지 저장 실패", Toast.LENGTH_SHORT).show()
     }
 }
