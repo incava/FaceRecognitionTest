@@ -5,30 +5,14 @@ import android.content.Context
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.material3.Button
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.Bitmap
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.iousoft.face.recognition.ui.component.CameraPreview
 import com.iousoft.face.recognition.ui.component.RequestCameraPermission
 import com.iousoft.face.recognition.viewmodel.FaceViewModel
@@ -45,23 +29,19 @@ fun CameraScreen(
     var hasCameraPermission by remember { mutableStateOf(false) }
     var isChecked by remember { mutableStateOf(true) }
     var isStopPreview by remember { mutableStateOf(false) }
+
     BackHandler(enabled = showCamera || faceBitmap != null) {
         when {
             faceBitmap != null -> {
-                // 얼굴 사진 보여지는 상태에서 뒤로가기 눌렀을 때
                 viewModel.reset()
                 showCamera = false
             }
 
             showCamera -> {
-                // 카메라 프리뷰 실행 중일 때 뒤로가기 눌렀을 때
                 showCamera = false
-
             }
 
-            else -> {
-                onBack()
-            }
+            else -> onBack()
         }
     }
 
@@ -77,49 +57,19 @@ fun CameraScreen(
 
     when {
         faceBitmap != null -> {
-            // 얼굴 인식 완료 -> 결과 이미지 표시
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(faceBitmap)
-                                .crossfade(true)
-                                .build(),
-                            contentScale = ContentScale.Fit,
-                            contentDescription = null,
-                            modifier = Modifier.height(540.dp)
-                        )
-                        Button(
-                            onClick = {
-                                viewModel.reset()
-                                showCamera = false
-                            }) {
-                            Text("다시 시도")
-                        }
-                        Button(onClick = {
-                            faceBitmap?.let {
-                                saveBitmapToGallery(context, it)
-                            }
-                        }) {
-                            Text("사진 저장")
-                        }
-                    }
-
+            FaceResultScreen(
+                faceBitmap = faceBitmap!!,
+                onRetry = {
+                    viewModel.reset()
+                    showCamera = false
+                },
+                onSave = {
+                    saveBitmapToGallery(context, faceBitmap!!)
                 }
-
-            }
+            )
         }
 
         showCamera -> {
-            // 카메라 프리뷰 실행
             CameraPreview(
                 onFaceDetected = { originalBitmap ->
                     viewModel.processFaceBitmap(originalBitmap, isChecked)
@@ -130,32 +80,11 @@ fun CameraScreen(
         }
 
         else -> {
-            // 초기 버튼 화면
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                )
-                {
-                    Button(onClick = { showCamera = true }) {
-                        Text("얼굴 인식 시작")
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(text = "누끼")
-                        Text(text = if (isChecked) "ON" else "OFF")
-                        Switch(
-                            checked = isChecked,
-                            onCheckedChange = { isChecked = it }
-                        )
-                    }
-                }
-            }
+            CameraStartScreen(
+                isChecked = isChecked,
+                onStartCamera = { showCamera = true },
+                onToggleSwitch = { isChecked = it }
+            )
         }
     }
 }
